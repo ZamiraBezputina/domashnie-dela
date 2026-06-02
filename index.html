@@ -738,7 +738,7 @@ function boot(){
   chip.className='user-chip '+(me==='Аня'?'anya':'dima');
   document.getElementById('footer-room').textContent='🔗 '+room.toUpperCase();
   today=activeDay();
-  initP2P();render();
+  initP2P();render();loadGithubMemes();
   setInterval(()=>{const d=activeDay();if(d!==today){today=d;celebrated=false;render();}updateHeader();},30000);
   // set default date inputs
   document.getElementById('ct-date').value=today;
@@ -1220,55 +1220,40 @@ function onGlassClick(){if(progress().pct===100)launchFireworks();}
 //  MEME + FIREWORKS
 // ══════════════════════════════════════════
 // ══════════════════════════════════════════
-//  MEME FOLDER (File System Access API)
+//  GITHUB MEMES
 // ══════════════════════════════════════════
-let memesFolderHandle=null;
-let memesImages=[];
+const GITHUB_MEMES_API='https://api.github.com/repos/ZamiraBezputina/domashnie-dela/contents/memes';
+let githubMemes=[];
 
-async function selectMemesFolder(){
-  if(!('showDirectoryPicker' in window)){
-    alert('Папка с мемами работает только в Chrome или Edge');return;
-  }
+async function loadGithubMemes(){
   try{
-    memesFolderHandle=await window.showDirectoryPicker({mode:'read'});
-    await loadMemesFromFolder();
-  }catch(e){/* cancelled */}
-}
-
-async function loadMemesFromFolder(){
-  memesImages=[];
-  if(!memesFolderHandle)return;
-  try{
-    for await(const entry of memesFolderHandle.values()){
-      if(entry.kind==='file'){
-        const file=await entry.getFile();
-        if(file.type.startsWith('image/'))memesImages.push(file);
-      }
-    }
+    const r=await fetch(GITHUB_MEMES_API,{headers:{Accept:'application/vnd.github+json'}});
+    if(!r.ok)return;
+    const files=await r.json();
+    githubMemes=Array.isArray(files)?files.filter(f=>/\.(jpg|jpeg|png|gif|webp)$/i.test(f.name)).map(f=>f.download_url):[];
     const pill=document.getElementById('memes-lbl');
-    pill.textContent=memesImages.length?`📁 ${memesImages.length} мемов`:'📁 мемы';
-  }catch(e){memesImages=[];}
+    pill.textContent=githubMemes.length?`🎭 ${githubMemes.length} мемов`:'📁 мемы';
+  }catch(e){githubMemes=[];}
 }
+
+function selectMemesFolder(){loadGithubMemes();}
 
 let memeHideT=null;
-let currentMemeUrl=null;
 
 function showMeme(person){
-  if(memesImages.length){showImageMeme();return;}
+  if(githubMemes.length){showImageMeme();return;}
   showTextMeme(person);
 }
 
-async function showImageMeme(){
-  const file=memesImages[Math.floor(Math.random()*memesImages.length)];
-  if(currentMemeUrl)URL.revokeObjectURL(currentMemeUrl);
-  currentMemeUrl=URL.createObjectURL(file);
+function showImageMeme(){
+  const url=githubMemes[Math.floor(Math.random()*githubMemes.length)];
   const overlay=document.getElementById('meme-overlay');
   document.getElementById('meme-em').textContent='';
-  document.getElementById('meme-txt').innerHTML=`<img src="${currentMemeUrl}" style="max-width:82vw;max-height:65vh;border-radius:16px;object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,.3)">`;
+  document.getElementById('meme-txt').innerHTML=`<img src="${url}" style="max-width:82vw;max-height:65vh;border-radius:16px;object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,.3)" onerror="this.parentElement.innerHTML='😅'">`;
   overlay.classList.add('visible');
   clearTimeout(memeHideT);
-  memeHideT=setTimeout(()=>{overlay.classList.remove('visible');URL.revokeObjectURL(currentMemeUrl);currentMemeUrl=null;},2400);
-  overlay.onclick=()=>{overlay.classList.remove('visible');URL.revokeObjectURL(currentMemeUrl);currentMemeUrl=null;};
+  memeHideT=setTimeout(()=>overlay.classList.remove('visible'),2400);
+  overlay.onclick=()=>overlay.classList.remove('visible');
 }
 
 function showTextMeme(person){
